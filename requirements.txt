@@ -7,5 +7,6 @@ torch
 torchvision
 tensorflow-cpu
 mtcnn
-numpy
+numpy<2
+
 

@@ -7,14 +7,7 @@ from PIL import Image
 from torchvision import transforms
 from collections import Counter
 
-# Safe MTCNN import
-try:
-    from mtcnn import MTCNN
-    MTCNN_IMPORT_OK = True
-except Exception as e:
-    print(f"[WARNING] MTCNN import failed: {e}. Haar Cascade fallback will be used.")
-    MTCNN_IMPORT_OK = False
-    MTCNN = None
+
 
 
 
@@ -96,15 +89,23 @@ else:
     norm_mean = [0.485, 0.456, 0.406]
     norm_std = [0.229, 0.224, 0.225]
 
-# Load MTCNN face detector safely
-mtcnn = None
-if MTCNN_IMPORT_OK and MTCNN is not None:
+# Lazy-loaded MTCNN face detector to prevent high startup memory and timeouts
+_mtcnn = None
+
+def get_mtcnn():
+    global _mtcnn
+    if _mtcnn is not None:
+        return _mtcnn
     try:
-        mtcnn = MTCNN(device=str(DEVICE))
+        from mtcnn import MTCNN
+        _mtcnn = MTCNN(device=str(DEVICE))
         print("[INFO] MTCNN face detector loaded successfully.")
     except Exception as e:
         print(f"[WARNING] MTCNN init failed: {e}. Haar Cascade fallback active.")
-        mtcnn = None
+        _mtcnn = None
+    return _mtcnn
+
+
 
 
 eval_tfms = transforms.Compose([
@@ -149,12 +150,14 @@ def predict_emotions(img_bgr: np.ndarray) -> dict:
 
     # Face detection: Try MTCNN first, fallback to OpenCV Haar Cascade
     detections = []
-    if mtcnn is not None:
+    detector = get_mtcnn()
+    if detector is not None:
         try:
-            detections = mtcnn.detect_faces(rgb)
+            detections = detector.detect_faces(rgb)
         except Exception as e:
             print(f"[WARNING] MTCNN face detection error: {e}")
             detections = []
+
 
     if not detections:
         try:
